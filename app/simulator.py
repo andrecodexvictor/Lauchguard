@@ -3,15 +3,16 @@ import logging
 import random
 import time
 import uuid
-from threading import Event, Thread
+from threading import Event, Thread, RLock
 from app.kafka import EventProducer
 from app.state import DashboardState
 
 log = logging.getLogger(__name__)
 
 class Simulator:
-    def __init__(self, producer: EventProducer, state: DashboardState, stop: Event):
+    def __init__(self, producer: EventProducer, state: DashboardState, stop: Event, control_lock=None):
         self.producer, self.state, self.stop = producer, state, stop
+        self.control_lock = control_lock or RLock()
         self.rng = random.Random(2417)
         self.recovery_start = None
         self.thread = Thread(target=self.run, daemon=True, name="checkout-simulator")
@@ -45,11 +46,12 @@ class Simulator:
             start = time.monotonic()
             try:
                 for _ in range(self.rng.randint(5, 15)):
-                    row = self.event()
-                    self.producer.send("checkout_events", row["customer_id"], row)
-                self.state.kafka_connected = True
+                    if self.stop.is_set():
+                        return
+                    with self.control_lock:
+                        row = self.event()
+                        self.producer.send("checkout_events", row["customer_id"], row)
             except Exception as exc:
                 log.error("Checkout publish failed: %s", type(exc).__name__)
-                self.state.kafka_connected = False
-                self.state.error = "Kafka publish failed; retrying"
+                self.state.delivery(False)
             self.stop.wait(max(.1, 1 - (time.monotonic() - start)))

@@ -1,0 +1,23 @@
+{
+  "type": "record",
+  "name": "DeploymentEvent",
+  "namespace": "launchguard",
+  "fields": [
+    {
+      "name": "deployment_id",
+      "type": "string"
+    },
+    {
+      "name": "service",
+      "type": "string"
+    },
+    {
+      "name": "version",
+      "type": "string"
+    },
+    {
+      "name": "action",
+      "type": "string"
+    }
+  ]
+}

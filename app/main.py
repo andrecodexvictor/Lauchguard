@@ -4,7 +4,7 @@ import time
 import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
-from threading import Event, Thread
+from threading import Event, Thread, RLock
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from app.consumer import OutputConsumers
@@ -16,6 +16,7 @@ from launchguard.config import load_settings
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger(__name__)
 state, stop = DashboardState(), Event()
+control_lock = RLock()
 producer: EventProducer | None = None
 simulator: Simulator | None = None
 bootstrap_thread: Thread | None = None
@@ -27,12 +28,10 @@ def deployment(version: str, action: str):
         producer.send("deployment_events", "checkout-service",
                       {"deployment_id": str(uuid.uuid4()), "service": "checkout-service",
                        "version": version, "action": action}, sync=True)
-        state.kafka_connected = True
-        state.error = None
+        state.delivery(True)
     except Exception as exc:
         log.error("Deployment delivery failed: %s", type(exc).__name__)
-        state.kafka_connected = False
-        state.error = "Kafka deployment delivery failed"
+        state.delivery(False)
         raise HTTPException(503, "Deployment event could not be delivered to Kafka") from None
 
 def bootstrap():
@@ -40,7 +39,10 @@ def bootstrap():
     while not stop.is_set():
         try:
             deployment("2.3.7", "DEPLOY")
-            simulator = Simulator(producer, state, stop)
+            state.transition("HEALTHY", "2.3.7", "DEPLOY")
+            if stop.is_set():
+                return
+            simulator = Simulator(producer, state, stop, control_lock)
             simulator.start()
             return
         except HTTPException:
@@ -49,11 +51,13 @@ def bootstrap():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global producer, bootstrap_thread
+    global producer, bootstrap_thread, simulator
     stop.clear()
     settings = load_settings()
-    producer = EventProducer(settings)
-    OutputConsumers(settings, state, stop).start()
+    simulator = None
+    producer = EventProducer(settings, on_delivery=state.delivery)
+    outputs = OutputConsumers(settings, state, stop)
+    outputs.start()
     bootstrap_thread = Thread(target=bootstrap, daemon=True, name="initial-deployment")
     bootstrap_thread.start()
     try:
@@ -61,9 +65,10 @@ async def lifespan(app: FastAPI):
     finally:
         stop.set()
         if bootstrap_thread:
-            bootstrap_thread.join(timeout=5)
+            bootstrap_thread.join(timeout=18)
         if simulator:
             simulator.thread.join(timeout=5)
+        outputs.close()
         if producer:
             producer.close()
 
@@ -83,7 +88,7 @@ def history():
 
 @app.post("/api/deploy")
 def deploy():
-    with state.lock:
+    with control_lock:
         if simulator is None or not simulator.thread.is_alive():
             raise HTTPException(503, "Waiting for stable deployment")
         if state.mode != "HEALTHY":
@@ -94,7 +99,7 @@ def deploy():
 
 @app.post("/api/rollback")
 def rollback():
-    with state.lock:
+    with control_lock:
         if state.mode != "BAD_RELEASE":
             raise HTTPException(409, "Rollback requires bad release")
         deployment("2.3.7", "ROLLBACK")
