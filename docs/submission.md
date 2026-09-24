@@ -14,7 +14,7 @@ The form describes the Most Impactful App prize and considers business impact, C
 | Job title / company | User to provide; do not invent |
 | GitHub repository | https://github.com/andrecodexvictor/Lauchguard |
 | Application description | Draft below; update after end-to-end validation |
-| Screenshot URL, required | https://raw.githubusercontent.com/andrecodexvictor/Lauchguard/codex/launchguard-reliability-submission/docs/stream-lineage-live-20260924.png — genuine browser capture; shows the deployment branch only |
+| Screenshot URL, required | https://raw.githubusercontent.com/andrecodexvictor/Lauchguard/codex/launchguard-reliability-submission/docs/stream-lineage-full-20260924.png — genuine browser capture of both input branches |
 | Connectors used | No connector verified yet; do not claim HTTP Sink until configured and receiving real signals |
 | Schema | Exact bootstrap Avro contracts: [checkout](checkout_events.avsc), [deployment](deployment_events.avsc) |
 
@@ -31,7 +31,7 @@ Paste both schemas into the schema field if it accepts multiple records:
 
 LaunchGuard is Predictive Release Intelligence for e-commerce SRE and financial operations teams. It aims to shorten the time between a harmful checkout release and an operator-approved rollback while exposing business impact. Kafka carries checkout and deployment events governed by Avro schemas in Schema Registry. Three Confluent Flink materialized tables have been created: deployment_state maintains the active release, checkout_enriched correlates events with that release using a temporal join, and release_metrics aggregates 10-second windows of failure rate, latency and failed GMV. A Python/FastAPI simulator and dashboard are implemented, and demonstration events have been written into both input topics using Flink SQL. The planned ML_FORECAST and incident stages would calculate forecast failure rate, GMV at risk, and expected hourly revenue loss using an illustrative 35% abandonment factor; failed GMV is not assumed to be permanently lost. These latter stages are not yet running. LaunchGuard does not use an LLM to decide that an incident exists.
 
-Do not claim a completed forecast, incident signal, HTTP Sink, or live rollback sequence until verified. The linked screenshot shows real lineage for the deployment branch; it does not prove the whole pipeline.
+Do not claim a completed forecast, incident signal, HTTP Sink, or live rollback sequence until verified. The linked screenshot shows real lineage from both input topics through the first Flink stages; it does not prove the whole pipeline.
 
 ## Evidence checklist
 
@@ -42,7 +42,7 @@ Do not claim a completed forecast, incident signal, HTTP Sink, or live rollback 
 - [x] Both input Avro subjects confirmed at version 1 in Schema Registry.
 - [x] deployment_state, checkout_enriched and release_metrics created in the existing Flink SQL Workspace.
 - [x] One stable deployment and 20 synthetic checkouts written by successful Flink SQL INSERT statements.
-- [x] Real Stream Lineage deployment branch captured: 2 topics, 5 applications at capture time.
+- [x] Real Stream Lineage graph captured: 4 topics, 9 applications, 21 messages in and 21 messages out at capture time.
 - [ ] Continuous Kafka traffic acknowledged from the application.
 - [ ] Temporal correlation verified across deployment and rollback boundaries.
 - [ ] release_metrics, impact_forecast and incident_signals producing real rows.
@@ -60,4 +60,4 @@ The remote execution environment cannot resolve the Kafka bootstrap hostname. Ka
 
 The actual FastAPI lifespan was tested with the available credentials: the dashboard and status API return HTTP 200 and accurately display the waiting state when Kafka is unreachable. This is not an end-to-end streaming test.
 
-The first three SQL cells have created materialized tables. A stable deployment INSERT completed and a 20-row checkout INSERT completed in the workspace. Stream Lineage now displays the deployment branch. The fourth SQL cell fails validation while extracting nested `ML_FORECAST` results; `impact_forecast` and `incident_signals` have not been created. No HTTP Sink exists. The compute pool is active and may incur ongoing usage; account owner should review billing after the submission. Kafka and connector charges are separate.
+The first three SQL cells have created materialized tables. A stable deployment INSERT completed and a 20-row checkout INSERT completed in the workspace. Stream Lineage now displays both input branches converging at `checkout_enriched` and continuing toward `release_metrics`. The fourth SQL cell fails validation while extracting nested `ML_FORECAST` results; `impact_forecast` and `incident_signals` have not been created. No HTTP Sink exists. The compute pool is active and may incur ongoing usage; account owner should review billing after the submission. Kafka and connector charges are separate.
