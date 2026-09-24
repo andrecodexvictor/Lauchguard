@@ -2,7 +2,7 @@
 
 Form: https://docs.google.com/forms/d/e/1FAIpQLSeNcjEcA3wYG6hzIIdtRG1IbeA4owiMMNCAA5lpNDducI4GJA/viewform
 
-The form describes the Most Impactful App prize and considers business impact, Confluent connectors, stream processing and stream governance. It explicitly marks the screenshot field **NO AI Usage Allowed**. Capture the actual app or Stream Lineage; do not generate, retouch, composite or fabricate evidence. The form has not been submitted.
+The form describes the Most Impactful App prize and considers business impact, Confluent connectors, stream processing and stream governance. It explicitly marks the screenshot field **NO AI Usage Allowed**. Capture the actual app or Stream Lineage; do not generate, retouch, composite or fabricate evidence. The form was submitted on September 24, 2026. Google Forms confirmed: “Thank you! Your App has been submitted for AI Day.”
 
 ## Fields
 
@@ -50,7 +50,7 @@ Do not claim a completed forecast, incident signal, HTTP Sink, or live rollback 
 - [ ] HTTP Sink connector delivers incident_signals to a temporary webhook.
 - [x] Real screenshot of populated Stream Lineage captured in the authenticated Confluent browser.
 - [x] Screenshot hosted in the public GitHub branch for judge access.
-- [ ] Identity fields reviewed and form submitted by the participant.
+- [x] Required identity and affiliation fields completed, and the form submitted; confirmation page observed.
 
 ## Current blockers
 
