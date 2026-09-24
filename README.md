@@ -44,7 +44,7 @@ source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env
 # Fill in the six values locally. Never commit .env.
-python -m scripts.verify_connection
+python -m scripts.preflight
 uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 

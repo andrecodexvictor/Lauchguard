@@ -42,8 +42,10 @@ This draft describes the intended full pipeline. Do not change “proposed” to
 
 ## Current blockers
 
-Both original and replacement credentials supplied to the local application were rejected by Schema Registry (HTTP 401, error 40102). Replace the Schema Registry credentials directly in the ignored `.env`; never paste secrets into chat or commit them. Kafka metadata verification also failed from this execution environment; its connectivity must be checked independently after credentials are corrected. Local tests use explicit mocks and do not establish cloud connectivity.
+Schema Registry authentication is now verified with the resource-scoped key, and both input subjects are present. Earlier HTTP 401 responses were caused by attempting to use a Global key with public Schema Registry; this combination is unsupported by Confluent. Credentials remain only in the ignored local `.env`.
 
-Flink SQL files remain deployment candidates. The pool exists, but no pipeline statement has been started in this implementation session. The console quoted $0.0035 per CFU per minute with a 10-CFU pool maximum (up to $2.10/hour for Flink compute alone); the account owner must authorize a spending limit before activation. Kafka and connector charges are separate.
+The remote execution environment cannot resolve the Kafka bootstrap hostname. Kafka credentials and live traffic therefore remain unverified. Run the Python application from a machine/network with DNS access to the configured broker and outbound TCP 9092. `python -m scripts.preflight` checks Registry authentication, broker DNS, Kafka metadata and the two input topics independently, without displaying credentials.
 
-The authenticated console confirms Registry resource `lsrc-zmj9dnd` has both input subjects at version 1, with BACKWARD compatibility, and reports zero resource API keys. The topic detail page separately reported an endpoint-access error. These facts do not establish a working client connection.
+The actual FastAPI lifespan was tested with the available credentials: the dashboard and status API return HTTP 200 and accurately display the waiting state when Kafka is unreachable. This is not an end-to-end streaming test.
+
+All five SQL candidate cells are saved in the existing SQL Workspace. The catalog recognizes both input tables with their expected Avro fields and Kafka `$rowtime`. No pipeline statement has been started. The console quoted $0.0035 per CFU per minute with a 10-CFU pool maximum (up to $2.10/hour for Flink compute alone); the account owner must authorize a spending limit before activation. Kafka and connector charges are separate.
