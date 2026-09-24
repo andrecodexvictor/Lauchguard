@@ -44,7 +44,7 @@ source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env
 # Fill in the six values locally. Never commit .env.
-python -m scripts.verify_connection
+python -m scripts.preflight
 uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
@@ -58,7 +58,7 @@ Routes: `GET /`, `GET /api/status`, `GET /api/history`, `GET /health`, `POST /ap
 
 Use the existing `launchguard-devday` environment and `launchguard-kafka` cluster in AWS `us-east-2`. A Flink compute pool and SQL Workspace are needed. Run `flink/01_deployment_state.sql` through `flink/05_incident_signals.sql` in order in streaming mode, inspecting each materialized table and its output before the next. These SQL files are **deployment candidates, not verified against the workspace**. Confirm the inferred input table schemas with `DESCRIBE checkout_events` and `DESCRIBE deployment_events`, then adjust any workspace-specific DDL errors.
 
-The forecast needs roughly 10 complete 10-second windows to warm up. The hourly GMV exposure is forecast failed GMV per 10-second window multiplied by 360. Expected loss applies an illustrative **35% abandonment factor**. Failed GMV is not all permanently lost revenue. **Revenue Protected** is populated from the peak observed expected hourly loss only after an actual bad-release signal, Kafka-acknowledged rollback, and healthy recovery signal.
+The forecast needs roughly 10 complete 10-second windows to warm up. The hourly GMV exposure is forecast failed GMV per 10-second window multiplied by 360. Expected loss applies an illustrative **35% abandonment factor**. Failed GMV is not all permanently lost revenue. **Revenue Protected** is the reduction from the observed peak expected hourly loss to the recovered expected hourly loss. It requires a real incident signal, Kafka-acknowledged rollback, 35 seconds of recovery and three distinct healthy Flink windows. It estimates reduced hourly exposure, not cash already saved. Delayed windows from before rollback and duplicate windows cannot trigger recovery. Connection badges expire when deliveries or pipeline outputs become stale.
 
 After the core pipeline is producing results, optionally add an HTTP Sink from `incident_signals` to a temporary webhook. Verify Stream Lineage in Confluent Cloud and use a genuine screenshot. Neither the connector nor lineage is claimed as completed here.
 
@@ -71,3 +71,7 @@ After the core pipeline is producing results, optionally add an HTTP Sink from `
 5. Once Flink emits a healthy recovery signal, show **REVENUE PROTECTED**, the timeline and authentic Confluent lineage.
 
 The control API has no authentication. Keep this development demo on a trusted network; do not expose it publicly without access controls.
+
+## Submission readiness
+
+See [the submission checklist](docs/submission.md) for the exact Developer Day form fields, evidence status and remaining work. Local tests use a mocked broker for control routes; passing tests is not evidence of a live Flink pipeline.

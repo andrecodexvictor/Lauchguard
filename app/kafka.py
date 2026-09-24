@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 import logging
 from threading import RLock
 from confluent_kafka import Producer
@@ -10,33 +11,41 @@ from launchguard.schemas import CHECKOUT_SCHEMA, DEPLOYMENT_SCHEMA
 
 log = logging.getLogger(__name__)
 
+
 class EventProducer:
-    def __init__(self, settings: Settings):
+    def __init__(self, settings: Settings, on_delivery=None):
         self.lock = RLock()
-        self.producer = Producer(kafka_config(settings))
+        self.on_delivery = on_delivery
+        self.producer = Producer(kafka_config(settings) | {
+            "enable.idempotence": True, "message.timeout.ms": 15000,
+        })
         registry = SchemaRegistryClient(schema_registry_config(settings))
         self.serializers = {
             "checkout_events": AvroSerializer(registry, CHECKOUT_SCHEMA, conf={"auto.register.schemas": True}),
-            "deployment_events": AvroSerializer(registry, DEPLOYMENT_SCHEMA, conf={"auto.register.schemas": True})}
-        self.last_error = None
-
-    def delivery(self, err, msg):
-        if err:
-            self.last_error = str(err)
-            log.error("Kafka delivery failed on %s: %s", msg.topic(), err)
+            "deployment_events": AvroSerializer(registry, DEPLOYMENT_SCHEMA, conf={"auto.register.schemas": True}),
+        }
 
     def send(self, topic: str, key: str, row: dict, sync: bool = False):
+        # Track this record's acknowledgement, not a shared error cleared by another send.
+        result = {"acknowledged": False}
+
+        def delivered(error, message):
+            result["acknowledged"] = error is None
+            if self.on_delivery:
+                self.on_delivery(error is None)
+            if error:
+                log.warning("Kafka delivery failed on %s (code %s)", message.topic(), error.code())
+
         with self.lock:
             payload = self.serializers[topic](row, SerializationContext(topic, MessageField.VALUE))
-            self.last_error = None
-            self.producer.produce(topic, key=key, value=payload, callback=self.delivery)
+            self.producer.produce(topic, key=key, value=payload, on_delivery=delivered)
             if sync:
-                pending = self.producer.flush(15)
-                if pending or self.last_error:
+                self.producer.flush(16)
+                if not result["acknowledged"]:
                     raise RuntimeError("Kafka delivery failed or timed out")
             else:
                 self.producer.poll(0)
 
     def close(self):
         with self.lock:
-            self.producer.flush(10)
+            self.producer.flush(5)

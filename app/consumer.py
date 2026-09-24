@@ -1,6 +1,7 @@
 from __future__ import annotations
 import json
 import logging
+import uuid
 from threading import Event, Thread
 from confluent_kafka import Consumer, KafkaError
 from confluent_kafka.schema_registry import SchemaRegistryClient
@@ -33,6 +34,7 @@ def decode(value, topic, avro):
 class OutputConsumers:
     def __init__(self, settings: Settings, state: DashboardState, stop: Event):
         self.settings, self.state, self.stop = settings, state, stop
+        self.session_id = uuid.uuid4().hex
         self.avro = AvroDeserializer(SchemaRegistryClient(schema_registry_config(settings)))
         self.threads = [Thread(target=self.run, args=(t,), daemon=True, name="consume-"+t) for t in TOPICS]
 
@@ -40,8 +42,12 @@ class OutputConsumers:
         for thread in self.threads:
             thread.start()
 
+    def close(self):
+        for thread in self.threads:
+            thread.join(timeout=10)
+
     def run(self, topic):
-        conf = kafka_config(self.settings) | {"group.id": "launchguard-ui-"+topic, "auto.offset.reset": "latest",
+        conf = kafka_config(self.settings) | {"group.id": "launchguard-ui-"+self.session_id+"-"+topic, "auto.offset.reset": "latest",
                                              "enable.auto.commit": True, "allow.auto.create.topics": False}
         while not self.stop.is_set():
             consumer = None
@@ -49,7 +55,7 @@ class OutputConsumers:
                 consumer = Consumer(conf)
                 metadata = consumer.list_topics(timeout=8)
                 ready = topic in metadata.topics and metadata.topics[topic].error is None
-                self.state.ready[topic] = ready
+                self.state.pipeline(topic, ready)
                 if not ready:
                     self.stop.wait(10)
                     continue
@@ -66,9 +72,9 @@ class OutputConsumers:
                     row = decode(msg.value(), topic, self.avro)
                     if row:
                         self.state.ingest(topic, row)
-                self.state.ready[topic] = False
+                self.state.pipeline(topic, False)
             except Exception as exc:
-                self.state.ready[topic] = False
+                self.state.pipeline(topic, False)
                 log.warning("Consumer %s waiting: %s", topic, type(exc).__name__)
                 self.stop.wait(10)
             finally:
